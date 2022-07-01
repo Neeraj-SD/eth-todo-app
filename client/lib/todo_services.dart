@@ -3,13 +3,15 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-// import 'package:notes_app/note.dart';
-import 'package:web3dart/web3dart.dart';
 import 'package:http/http.dart' as http;
+// import 'package:tasks_app/Todo.dart';
+import 'package:web3dart/web3dart.dart';
 import 'package:web_socket_channel/io.dart';
 
-class NotesServices extends ChangeNotifier {
-  List<Note> notes = [];
+import 'todo.dart';
+
+class tasksServices extends ChangeNotifier {
+  List<Todo> tasks = [];
   final String _rpcUrl =
       Platform.isAndroid ? 'http://10.0.2.2:7545' : 'http://127.0.0.1:7545';
   final String _wsUrl =
@@ -17,10 +19,10 @@ class NotesServices extends ChangeNotifier {
   bool isLoading = true;
 
   final String _privatekey =
-      '202b9d3e13a004b00c7be08f7dc7168ef355180bfb52999b14d4dc0369bb6f3d';
+      '721182f13ab166e916cdd637f3f907a933d5dfc98519d812be35e9d657f98507';
   late Web3Client _web3cient;
 
-  NotesServices() {
+  tasksServices() {
     init();
   }
 
@@ -41,10 +43,10 @@ class NotesServices extends ChangeNotifier {
   late EthereumAddress _contractAddress;
   Future<void> getABI() async {
     String abiFile =
-        await rootBundle.loadString('build/contracts/NotesContract.json');
+        await rootBundle.loadString('build/contracts/TodoList.json');
     var jsonABI = jsonDecode(abiFile);
     _abiCode =
-        ContractAbi.fromJson(jsonEncode(jsonABI['abi']), 'NotesContract');
+        ContractAbi.fromJson(jsonEncode(jsonABI['abi']), 'tasksContract');
     _contractAddress =
         EthereumAddress.fromHex(jsonABI["networks"]["5777"]["address"]);
   }
@@ -55,40 +57,40 @@ class NotesServices extends ChangeNotifier {
   }
 
   late DeployedContract _deployedContract;
-  late ContractFunction _createNote;
-  late ContractFunction _deleteNote;
-  late ContractFunction _notes;
-  late ContractFunction _noteCount;
+  late ContractFunction _createTodo;
+  late ContractFunction _deleteTodo;
+  late ContractFunction _tasks;
+  late ContractFunction _createTask;
 
   Future<void> getDeployedContract() async {
     _deployedContract = DeployedContract(_abiCode, _contractAddress);
-    _createNote = _deployedContract.function('createNote');
-    _deleteNote = _deployedContract.function('deleteNote');
-    _notes = _deployedContract.function('notes');
-    _noteCount = _deployedContract.function('noteCount');
-    await fetchNotes();
+    _createTask = _deployedContract.function('createTask');
+    // _deleteTodo = _deployedContract.function('deleteTodo');
+    _tasks = _deployedContract.function('tasks');
+    // _TodoCount = _deployedContract.function('TodoCount');
+    await fetchtasks();
   }
 
-  Future<void> fetchNotes() async {
+  Future<void> fetchtasks() async {
     List totalTaskList = await _web3cient.call(
       contract: _deployedContract,
-      function: _noteCount,
+      function: _tasks,
       params: [],
     );
 
     int totalTaskLen = totalTaskList[0].toInt();
-    notes.clear();
+    tasks.clear();
     for (var i = 0; i < totalTaskLen; i++) {
       var temp = await _web3cient.call(
           contract: _deployedContract,
-          function: _notes,
+          function: _tasks,
           params: [BigInt.from(i)]);
       if (temp[1] != "") {
-        notes.add(
-          Note(
+        tasks.add(
+          Todo(
             id: (temp[0] as BigInt).toInt(),
-            title: temp[1],
-            description: temp[2],
+            content: temp[1],
+            completed: temp[2],
           ),
         );
       }
@@ -98,30 +100,30 @@ class NotesServices extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addNote(String title, String description) async {
+  Future<void> addTodo(String title, String description) async {
     await _web3cient.sendTransaction(
       _creds,
       Transaction.callContract(
         contract: _deployedContract,
-        function: _createNote,
+        function: _createTodo,
         parameters: [title, description],
       ),
     );
     isLoading = true;
-    fetchNotes();
+    fetchtasks();
   }
 
-  Future<void> deleteNote(int id) async {
+  Future<void> deleteTodo(int id) async {
     await _web3cient.sendTransaction(
       _creds,
       Transaction.callContract(
         contract: _deployedContract,
-        function: _deleteNote,
+        function: _deleteTodo,
         parameters: [BigInt.from(id)],
       ),
     );
     isLoading = true;
     notifyListeners();
-    fetchNotes();
+    fetchtasks();
   }
 }
